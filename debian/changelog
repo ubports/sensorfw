@@ -1,4 +1,4 @@
-sensorfw-qt5 (0.11.1) unstable; urgency=medium
+sensorfw-qt5 (0.11.1) xenial; urgency=medium
 
   * [packaging] Add missing debian build dependencies. Fixes MER#2060
 
