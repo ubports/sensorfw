@@ -3,3 +3,4 @@
 /usr/lib/libsensorfw-qt5.so*
 /usr/sbin/sensorfwd
 /etc/dbus-1/system.d/*
+../sensorfw.conf /etc/init
