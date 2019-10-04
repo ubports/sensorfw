@@ -8,7 +8,7 @@ TARGET = sensorfwd
 CONFIG += console \
           link_pkgconfig
 
-PKGCONFIG += libsystemd
+PKGCONFIG += libsystemd deviceinfo
 
 SENSORFW_INCLUDEPATHS = .. \
                         ../include \
@@ -44,4 +44,3 @@ INSTALLS += target \
             TARGET_H
 
 include(../common.pri)
-
