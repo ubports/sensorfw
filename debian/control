@@ -13,7 +13,10 @@ Build-Depends: debhelper (>=5),
                libhardware-dev,
                android-headers,
                libhybris-dev,
-               libdeviceinfo-dev
+               libdeviceinfo-dev,
+               libglib2.0-dev,
+               libglibutil-dev,
+               libgbinder-dev
 Standards-Version: 3.7.3
 
 Package: sensorfw-qt5

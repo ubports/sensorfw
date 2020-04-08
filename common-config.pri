@@ -42,5 +42,9 @@ contains(CONFIG,hybris) {
     } else {
         PKGCONFIG += android-headers libhardware
     }
+} else {
+    contains(CONFIG,binder) {
+        DEFINES += USE_BINDER=1
+        PKGCONFIG += libgbinder libglibutil gobject-2.0 glib-2.0
+    }
 }
-
