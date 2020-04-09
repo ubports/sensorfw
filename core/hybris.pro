@@ -22,6 +22,9 @@ LIBS += -L/usr/lib -L../datatypes
 !contains(CONFIG,binder) {
     INCLUDEPATH += /usr/include/android-28
     LIBS += -lhybris-common -lhardware
+} else {
+    INCLUDEPATH += /usr/include/gbinder /usr/include/gutil /usr/include/glib-2.0
+    INCLUDEPATH += /usr/lib/x86_64-linux-gnu/glib-2.0/include /usr/lib/arm-linux-gnueabihf/glib-2.0/include /usr/lib/aarch64-linux-gnu/glib-2.0/include
 }
 
 include(../common-install.pri)
