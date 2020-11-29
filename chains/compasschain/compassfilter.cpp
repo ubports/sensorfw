@@ -27,11 +27,12 @@
 #define DEGREES_TO_RADIANS 0.017453292
 #define GRAVITY_EARTH 9.80665f
 #define FILTER_FACTOR 0.24f
-#define LIST_COUNT 10
 
 CompassFilter::CompassFilter() :
         magDataSink(this, &CompassFilter::magDataAvailable),
         accelSink(this, &CompassFilter::accelDataAvailable),
+        magX(0), magY(0), magZ(0),
+        oldMagX(0), oldMagY(0), oldMagZ(0),
         level(0),
         oldHeading(0)
 {
@@ -61,7 +62,7 @@ void CompassFilter::accelDataAvailable(unsigned, const AccelerationData *data)
     // the x/y are switched as compass expects it in aero coordinates
     qreal Gx = data->y_ * .001f; //convert to g
     qreal Gy = data->x_ * .001f;
-    qreal Gz = -data->z_ * .001f;
+    qreal Gz = data->z_ * .001f;
 
     qreal divisor = qSqrt(Gx * Gx + Gy * Gy + Gz * Gz);
     qreal normalizedGx = Gx / divisor;
@@ -105,11 +106,19 @@ void CompassFilter::accelDataAvailable(unsigned, const AccelerationData *data)
     /* calculate yaw = ecompass angle psi (-180deg, 180deg) */
     Psi = (qAtan2(-fBfy, fBfx) * RADIANS_TO_DEGREES); /* Equation 7 */
 
-    qreal heading = Psi * FILTER_FACTOR + oldHeading * (1.0 - FILTER_FACTOR);
+    qreal heading;
+    if (Psi < -90.0f && oldHeading > 90.0f) {
+        heading = (Psi + 360.0f) * FILTER_FACTOR + oldHeading * (1.0 - FILTER_FACTOR);
+    } else if (Psi > 90.0f && oldHeading < -90.0f) {
+        heading = Psi * FILTER_FACTOR + (oldHeading + 360.0f) * (1.0 - FILTER_FACTOR);
+    } else {
+        heading = Psi * FILTER_FACTOR + oldHeading * (1.0 - FILTER_FACTOR);
+    }
 
     CompassData compassData; //north angle
     compassData.timestamp_ = data->timestamp_;
     compassData.degrees_ = (int)(heading + 360) % 360;
+    compassData.rawDegrees_ = compassData.degrees_;
     compassData.level_ = level;
     magSource.propagate(1, &compassData);
     oldHeading = heading;
