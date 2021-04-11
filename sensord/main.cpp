@@ -231,8 +231,8 @@ int main(int argc, char *argv[])
     if (parser.deviceInfo())
     {
         DeviceInfo *deviceInfo = new DeviceInfo();
-        if (deviceInfo->contains("sensorfwConfig")) {
-            defConfigFile = QString::fromStdString(deviceInfo->get("sensorfwConfig",
+        if (deviceInfo->contains("SensorfwConfig")) {
+            defConfigFile = QString::fromStdString(deviceInfo->get("SensorfwConfig",
                                                    defConfigFile.toStdString()));
         }
     }
