@@ -50,8 +50,9 @@
 #include <deviceadaptor.h>
 #include "datatypes/orientationdata.h"
 
-#define GRAVITY         9.80665
-#define REV_GRAVITY     0.101936799
+#define GRAVITY             9.80665
+#define REV_GRAVITY         0.101936799
+#define RADIANS_TO_DEGREES 57.2957795
 
 // Proximity sensor
 #define PROXIMITY_DEFAULT_THRESHOLD 250
@@ -63,6 +64,11 @@
 #define CONVERT_A_Y(x)  ((float(x) / 1000) * (GRAVITY * 1.0))
 #define CONVERT_A_Z(x)  ((float(x) / 1000) * (GRAVITY * 1.0))
 
+/* Documentation for the iio sensors is given in
+   https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-bus-iio (1)
+   In this document you will find the units which are used in explanation of values in sysfs-bus-iio
+*/
+
 IioAdaptor::IioAdaptor(const QString &id) :
         SysfsAdaptor(id, SysfsAdaptor::IntervalMode, true),
         deviceId(id)
@@ -73,8 +79,10 @@ IioAdaptor::IioAdaptor(const QString &id) :
 
 IioAdaptor::~IioAdaptor()
 {
-    if (iioXyzBuffer_)
-        delete iioXyzBuffer_;
+    if (accelerometerBuffer_)
+        delete accelerometerBuffer_;
+    if (gyroscopeBuffer_)
+        delete gyroscopeBuffer_;
     if (alsBuffer_)
         delete alsBuffer_;
     if (magnetometerBuffer_)
@@ -88,59 +96,63 @@ void IioAdaptor::setup()
     qDebug() << Q_FUNC_INFO << deviceId;
 
     if (deviceId.startsWith("accel")) {
-        const QString name = "accelerometer";
-        const QString inputMatch = SensorFrameworkConfig::configuration()->value<QString>(name + "/input_match");
-        qDebug() << "input_match" << inputMatch;
+        const QString sensorTypeInConfig = "accelerometer";
+        const QString inputMatch = SensorFrameworkConfig::configuration()->value<QString>(sensorTypeInConfig + "/input_match");
+        qDebug() << sensorTypeInConfig + ":" << "input_match" << inputMatch;
 
         iioDevice.channelTypeName = "accel";
         devNodeNumber = findSensor(inputMatch);
         if (devNodeNumber!= -1) {
-            const QString desc = "Industrial I/O accelerometer (" + iioDevice.name +")";
-            qDebug() << Q_FUNC_INFO << "Accelerometer found";
-            iioXyzBuffer_ = new DeviceAdaptorRingBuffer<TimedXyzData>(1);
-            setAdaptedSensor(name, desc, iioXyzBuffer_);
+            const QString description = "Industrial I/O accelerometer (" + iioDevice.name +")";
+
+            accelerometerBuffer_ = new DeviceAdaptorRingBuffer<TimedXyzData>(1);
+            setAdaptedSensor(sensorTypeInConfig, iioDevice.name, accelerometerBuffer_);
+            setDescription(description);
 
             iioDevice.sensorType = IioAdaptor::IIO_ACCELEROMETER;
         }
     } else if (deviceId.startsWith("gyro")) {
-        const QString name = "gyroscope";
-        const QString inputMatch = SensorFrameworkConfig::configuration()->value<QString>(name + "/input_match");
-        qDebug() << "input_match" << inputMatch;
+        const QString sensorTypeInConfig = "gyroscope";
+        const QString inputMatch = SensorFrameworkConfig::configuration()->value<QString>(sensorTypeInConfig + "/input_match");
+        qDebug() << sensorTypeInConfig + ":" << "input_match" << inputMatch;
 
         iioDevice.channelTypeName = "anglvel";
         devNodeNumber = findSensor(inputMatch);
         if (devNodeNumber!= -1) {
-            const QString desc = "Industrial I/O gyroscope (" + iioDevice.name +")";
-            iioXyzBuffer_ = new DeviceAdaptorRingBuffer<TimedXyzData>(1);
-            setAdaptedSensor(name, desc, iioXyzBuffer_);
-
+            const QString description = "Industrial I/O gyroscope (" + iioDevice.name +")";
+            gyroscopeBuffer_ = new DeviceAdaptorRingBuffer<TimedXyzData>(1);
+            setAdaptedSensor(sensorTypeInConfig, iioDevice.name, gyroscopeBuffer_);
+            setDescription(description);
             iioDevice.sensorType = IioAdaptor::IIO_GYROSCOPE;
         }
     } else if (deviceId.startsWith("mag")) {
-        const QString name = "magnetometer";
-        const QString inputMatch = SensorFrameworkConfig::configuration()->value<QString>(name + "/input_match");
-        qDebug() << "input_match" << inputMatch;
+        const QString sensorTypeInConfig = "magnetometer";
+        const QString inputMatch = SensorFrameworkConfig::configuration()->value<QString>(sensorTypeInConfig + "/input_match");
+        qDebug() << sensorTypeInConfig + ":" << "input_match" << inputMatch;
 
         iioDevice.channelTypeName = "magn";
         devNodeNumber = findSensor(inputMatch);
         if (devNodeNumber!= -1) {
-            const QString desc = "Industrial I/O magnetometer (" + iioDevice.name +")";
-            magnetometerBuffer_ = new DeviceAdaptorRingBuffer<CalibratedMagneticFieldData>(1);
-            setAdaptedSensor(name, desc, magnetometerBuffer_);
+            const QString description = "Industrial I/O magnetometer (" + iioDevice.name +")";
 
+            magnetometerBuffer_ = new DeviceAdaptorRingBuffer<CalibratedMagneticFieldData>(1);
+            setAdaptedSensor(sensorTypeInConfig, iioDevice.name, magnetometerBuffer_);
+            setDescription(description);
             iioDevice.sensorType = IioAdaptor::IIO_MAGNETOMETER;
         }
     } else if (deviceId.startsWith("als")) {
-        const QString name = "als";
-        const QString inputMatch = SensorFrameworkConfig::configuration()->value<QString>(name + "/input_match");
+        const QString sensorTypeInConfig = "als";
+        const QString inputMatch = SensorFrameworkConfig::configuration()->value<QString>(sensorTypeInConfig + "/input_match");
+        qDebug() << sensorTypeInConfig + ":" << "input_match" << inputMatch;
 
         iioDevice.channelTypeName = "illuminance";
         devNodeNumber = findSensor(inputMatch);
         if (devNodeNumber!= -1) {
-            QString desc = "Industrial I/O light sensor (" + iioDevice.name +")";
-            qDebug() << desc;
+            const QString description = "Industrial I/O light sensor (" + iioDevice.name +")";
+
             alsBuffer_ = new DeviceAdaptorRingBuffer<TimedUnsigned>(1);
-            setAdaptedSensor(name, desc, alsBuffer_);
+            setAdaptedSensor(sensorTypeInConfig, iioDevice.name, alsBuffer_);
+            setDescription(description);
             iioDevice.sensorType = IioAdaptor::IIO_ALS;
         }
     } else if (deviceId.startsWith("prox")) {
@@ -152,10 +164,10 @@ void IioAdaptor::setup()
         devNodeNumber = findSensor(inputMatch);
         proximityThreshold = SensorFrameworkConfig::configuration()->value<QString>(name + "/threshold", QString(PROXIMITY_DEFAULT_THRESHOLD)).toInt();
         if (devNodeNumber!= -1) {
-            QString desc = "Industrial I/O proximity sensor (" + iioDevice.name +")";
-            qDebug() << desc;
+            QString description = "Industrial I/O proximity sensor (" + iioDevice.name +")";
             proximityBuffer_ = new DeviceAdaptorRingBuffer<ProximityData>(1);
-            setAdaptedSensor(name, desc, proximityBuffer_);
+            setAdaptedSensor(name, iioDevice.name, proximityBuffer_);
+            setDescription(description);
             iioDevice.sensorType = IioAdaptor::IIO_PROXIMITY;
         }
     }
@@ -171,13 +183,15 @@ void IioAdaptor::setup()
         scanElementsEnable(devNodeNumber,0);
     }
 
-    /* Override the scaling factor if asked */
+    /* Temperary switch this of. scale_override is always set which can not be true???? Loading issue deviceinfo???
+    // Override the scaling factor if asked 
     bool ok;
     double scale_override = SensorFrameworkConfig::configuration()->value(iioDevice.name + "/scale").toDouble(&ok);
     if (ok) {
         sensordLogD() << "Overriding scale to" << scale_override;
         iioDevice.scale = scale_override;
     }
+    */
 
     introduceAvailableDataRange(DataRange(0, 65535, 1));
     introduceAvailableInterval(DataRange(0, 586, 0));
@@ -448,13 +462,22 @@ void IioAdaptor::processSample(int fileId, int fd)
         case 0: {
             switch (iioDevice.sensorType) {
             case IioAdaptor::IIO_ACCELEROMETER:
+                accelData = accelerometerBuffer_->nextSlot();
+                // sensorfw works with milli-G. Hence converting m/s^2 to milli-G. See link (1)
+                // Hardware calibration offset in_accel_x_calibbias (assumed to fix productioninaccuracies) is already applied.
+                accelData->x_= -(result + iioDevice.offset) * iioDevice.scale * 1000 * REV_GRAVITY;
+                break;
             case IioAdaptor::IIO_GYROSCOPE:
-                timedData = iioXyzBuffer_->nextSlot();
-                timedData->x_= -(result + iioDevice.offset) * iioDevice.scale * 1000 * REV_GRAVITY;
+                gyroData = gyroscopeBuffer_->nextSlot();
+                // sensorfw works with milidegrees/s. Hence converting rad/s -> milidegrees/s. See link (1)
+                // Hardware calibration offset in_anglvel_x_calibbias (assumed to fix productioninaccuracies) is already applied.
+                gyroData->x_= (result + iioDevice.offset) * iioDevice.scale  * 1000 * RADIANS_TO_DEGREES;
                 break;
             case IioAdaptor::IIO_MAGNETOMETER:
-                calData = magnetometerBuffer_->nextSlot();
-                calData->rx_ = (result + iioDevice.offset) * iioDevice.scale;
+                calMagData = magnetometerBuffer_->nextSlot();
+                // sensorfw works with nano Tesla. Hence converting Gaus -> nT. See link (1)
+                // inserting the raw x data (rx_)
+                calMagData->rx_ = (result + iioDevice.offset) * iioDevice.scale * 100000;
                 break;
             case IioAdaptor::IIO_ALS:
                 uData = alsBuffer_->nextSlot();
@@ -482,14 +505,16 @@ void IioAdaptor::processSample(int fileId, int fd)
         case 1: {
             switch (iioDevice.sensorType) {
             case IioAdaptor::IIO_ACCELEROMETER:
+                accelData = accelerometerBuffer_->nextSlot();
+                accelData->y_= -(result + iioDevice.offset) * iioDevice.scale * 1000 * REV_GRAVITY;
+                break;
             case IioAdaptor::IIO_GYROSCOPE:
-                timedData = iioXyzBuffer_->nextSlot();
-                timedData->y_= -(result + iioDevice.offset) * iioDevice.scale * 1000 * REV_GRAVITY;
+                gyroData = gyroscopeBuffer_->nextSlot();
+                gyroData->y_= (result + iioDevice.offset) * iioDevice.scale * 1000* RADIANS_TO_DEGREES;
                 break;
             case IioAdaptor::IIO_MAGNETOMETER:
-                calData = magnetometerBuffer_->nextSlot();
-                result = (result * iioDevice.scale);
-                calData->y_ = result;
+                calMagData = magnetometerBuffer_->nextSlot();
+                calMagData->ry_ = (result + iioDevice.offset) * iioDevice.scale * 100000;
                 break;
             default:
                 break;
@@ -500,14 +525,16 @@ void IioAdaptor::processSample(int fileId, int fd)
         case 2: {
             switch (iioDevice.sensorType) {
             case IioAdaptor::IIO_ACCELEROMETER:
+                accelData = accelerometerBuffer_->nextSlot();
+                accelData->z_ = -(result + iioDevice.offset) * iioDevice.scale * 1000 * REV_GRAVITY;
+                break;
             case IioAdaptor::IIO_GYROSCOPE:
-                timedData = iioXyzBuffer_->nextSlot();
-                timedData->z_ = -(result + iioDevice.offset) * iioDevice.scale * 1000 * REV_GRAVITY;
+                gyroData = gyroscopeBuffer_->nextSlot();
+                gyroData->z_ = (result + iioDevice.offset) * iioDevice.scale * 1000 * RADIANS_TO_DEGREES;
                 break;
             case IioAdaptor::IIO_MAGNETOMETER:
-                calData = magnetometerBuffer_->nextSlot();
-                result = ((result + iioDevice.offset) * iioDevice.scale) * 100;
-                calData->rz_ = result;
+                calMagData = magnetometerBuffer_->nextSlot();
+                calMagData->rz_ = (result + iioDevice.offset) * iioDevice.scale * 100000;
                 break;
             default:
                 break;
@@ -519,27 +546,38 @@ void IioAdaptor::processSample(int fileId, int fd)
         if (channel == iioDevice.channels - 1) {
             switch (iioDevice.sensorType) {
             case IioAdaptor::IIO_ACCELEROMETER:
+                accelData->timestamp_ = Utils::getTimeStamp();
+                accelerometerBuffer_->commit();
+                accelerometerBuffer_->wakeUpReaders();
+                // Uncomment line to test accelerometer sensor
+                //sensordLogT() << "Accelerometer offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "x=" << accelData->x_ << "y=" << accelData->y_ << "z=" << accelData->z_ << "timestamp=" << accelData->timestamp_;
+                break;
             case IioAdaptor::IIO_GYROSCOPE:
-                timedData->timestamp_ = Utils::getTimeStamp();
-                iioXyzBuffer_->commit();
-                iioXyzBuffer_->wakeUpReaders();
+                gyroData->timestamp_ = Utils::getTimeStamp();
+                gyroscopeBuffer_->commit();
+                gyroscopeBuffer_->wakeUpReaders();
+                //sensordLogT() << "Gyroscope offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "x=" << gyroData->x_ << "y=" << gyroData->y_ << "z=" << gyroData->z_ << "timestamp=" << gyroData->timestamp_;
                 break;
             case IioAdaptor::IIO_MAGNETOMETER:
-                calData->timestamp_ = Utils::getTimeStamp();
+                calMagData->timestamp_ = Utils::getTimeStamp();
                 magnetometerBuffer_->commit();
                 magnetometerBuffer_->wakeUpReaders();
+                // Uncomment line to test magnetometer sensor
+                sensordLogT() << "Magnetometer offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "x=" << calMagData->rx_ << "y=" << calMagData->ry_ << calMagData->rz_ << "timestamp=" << calMagData->timestamp_;
                 break;
             case IioAdaptor::IIO_ALS:
                 uData->timestamp_ = Utils::getTimeStamp();
                 alsBuffer_->commit();
                 alsBuffer_->wakeUpReaders();
-                sensordLogT() << "ALS offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "value=" << uData->value_ << "timestamp=" << uData->timestamp_;
+                // Uncomment line to test ALS sensor
+                //sensordLogT() << "ALS offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "value=" << uData->value_ << "timestamp=" << uData->timestamp_;
                 break;
             case IioAdaptor::IIO_PROXIMITY:
                 proximityData->timestamp_ = Utils::getTimeStamp();
                 proximityBuffer_->commit();
                 proximityBuffer_->wakeUpReaders();
-                sensordLogT() << "Proximity offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "value=" << proximityData->value_ << "within proximity=" << proximityData->withinProximity_ << "timestamp=" << proximityData->timestamp_;
+                // Uncomment line to test proximity sensor
+                //sensordLogT() << "Proximity offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "value=" << proximityData->value_ << "within proximity=" << proximityData->withinProximity_ << "timestamp=" << proximityData->timestamp_;
                 break;
             default:
                 break;

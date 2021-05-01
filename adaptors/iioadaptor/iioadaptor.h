@@ -133,7 +133,8 @@ private:
 
     int proximityThreshold;
 
-    DeviceAdaptorRingBuffer<TimedXyzData>* iioXyzBuffer_;
+    DeviceAdaptorRingBuffer<TimedXyzData>* accelerometerBuffer_;
+    DeviceAdaptorRingBuffer<TimedXyzData>* gyroscopeBuffer_;
     DeviceAdaptorRingBuffer<TimedUnsigned>* alsBuffer_;
     DeviceAdaptorRingBuffer<CalibratedMagneticFieldData>* magnetometerBuffer_;
     DeviceAdaptorRingBuffer<ProximityData>* proximityBuffer_;
@@ -142,8 +143,9 @@ private:
 
     QString deviceId;
 
-    TimedXyzData* timedData;
-    CalibratedMagneticFieldData *calData;
+    TimedXyzData* accelData;
+    TimedXyzData* gyroData;
+    CalibratedMagneticFieldData *calMagData;
     TimedUnsigned *uData;
     ProximityData *proximityData;
 
