@@ -25,6 +25,7 @@ LIBS += -L/usr/lib -L../datatypes
 } else {
     INCLUDEPATH += /usr/include/gbinder /usr/include/gutil /usr/include/glib-2.0
     INCLUDEPATH += /usr/lib/x86_64-linux-gnu/glib-2.0/include /usr/lib/arm-linux-gnueabihf/glib-2.0/include /usr/lib/aarch64-linux-gnu/glib-2.0/include
+    LIBS += -lcutils -lutils -lfmq -landroid.hardware.sensors_1.0 -landroid.hardware.sensors_2.0
 }
 
 include(../common-install.pri)

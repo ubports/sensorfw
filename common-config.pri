@@ -37,14 +37,18 @@ OTHER_FILES += \
 contains(CONFIG,hybris) {
     CONFIG += link_pkgconfig
     contains(CONFIG,binder) {
+        CONFIG += c++17
         DEFINES += USE_BINDER=1
+        INCLUDEPATH += /usr/include/linux-hidl
         PKGCONFIG += libgbinder libglibutil gobject-2.0 glib-2.0
     } else {
         PKGCONFIG += android-headers libhardware
     }
 } else {
     contains(CONFIG,binder) {
+        CONFIG += c++17
         DEFINES += USE_BINDER=1
+        INCLUDEPATH += /usr/include/linux-hidl
         PKGCONFIG += libgbinder libglibutil gobject-2.0 glib-2.0
     }
 }
