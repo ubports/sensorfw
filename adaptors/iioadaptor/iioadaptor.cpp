@@ -599,6 +599,22 @@ void IioAdaptor::processSample(int fileId, int fd)
 bool IioAdaptor::setInterval(const unsigned int value, const int sessionId)
 {
     if (mode() == SysfsAdaptor::IntervalMode)
+        if (value != 0) {
+            QString pathFreq = iioDevice.devicePath + "sampling_frequency";
+
+            float freq = 1000.0/value;
+            float out_freq = 1.0;
+
+            foreach(float valid_freq, iioDevice.frequencyList){
+                if (freq >= valid_freq){
+                    out_freq = valid_freq;
+                }                    
+            }
+
+            sysfsWriteInt(pathFreq, (int)out_freq);
+
+            qDebug() << iioDevice.name + ":" << "Frequency set to" << out_freq << "Hz";
+        }
         return SysfsAdaptor::setInterval(value, sessionId);
 
     sensordLogD() << "Ignoring setInterval for " << value;
