@@ -234,6 +234,7 @@ int IioAdaptor::findSensor(const QString &sensorName)
                 iioDevice.offset = 0.0;
                 iioDevice.scale = 1.0;
                 iioDevice.frequency = 1.0;
+                iioDevice.frequencyList = {1.0};
                 qDebug() << Q_FUNC_INFO << "Syspath for sensor (" + sensorName + "):" << iioDevice.devicePath;
 
                 udev_list_entry_foreach(sysattr, udev_device_get_sysattr_list_entry(dev)) {
@@ -261,6 +262,15 @@ int IioAdaptor::findSensor(const QString &sensorName)
                         iioDevice.frequency = QString(value).toDouble(&ok);
                         if (ok) {
                             qDebug() << sensorName + ":" << "Frequency is" << iioDevice.frequency;
+                        }
+                    } else if (attributeName.endsWith("frequency_available")) {                        
+                        iioDevice.frequencyList = {};
+
+                        foreach(QString freq, QString(value).split(" ")){
+                            iioDevice.frequencyList << freq.toDouble(&ok);
+                        }
+                        if (ok) {
+                            qDebug() << sensorName + ":" << "Frequency list is" << iioDevice.frequencyList;
                         }
                     } else if (attributeName.contains(QRegularExpression(iioDevice.channelTypeName + ".*raw$"))) {
                         qDebug() << "adding to paths:" << iioDevice.devicePath
