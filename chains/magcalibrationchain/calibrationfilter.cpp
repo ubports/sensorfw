@@ -114,10 +114,6 @@ void CalibrationFilter::magDataAvailable(unsigned, const CalibratedMagneticField
 
             transformed.level_ = calLevel;
 
-            transformed.x_ -= offsetX;
-            transformed.y_ -= offsetY;
-            transformed.z_ -= offsetZ;
-
             ///////////////////// soft iron
             qreal vmaxX = minMaxList.at(0).second - ((minMaxList.at(0).first + minMaxList.at(0).second) * 0.5);
             qreal vmaxY = minMaxList.at(1).second - ((minMaxList.at(1).first + minMaxList.at(1).second) * 0.5);
@@ -141,6 +137,10 @@ void CalibrationFilter::magDataAvailable(unsigned, const CalibratedMagneticField
             yScale = (avgRad/avgY);
             zScale = (avgRad/avgZ);
         }
+
+        transformed.x_ -= offsetX;
+        transformed.y_ -= offsetY;
+        transformed.z_ -= offsetZ;
 
         transformed.x_ *= xScale;
         transformed.y_ *= yScale;
