@@ -234,6 +234,7 @@ int IioAdaptor::findSensor(const QString &sensorName)
                 iioDevice.offset = 0.0;
                 iioDevice.scale = 1.0;
                 iioDevice.frequency = 1.0;
+                iioDevice.frequencyList = {1.0};
                 qDebug() << Q_FUNC_INFO << "Syspath for sensor (" + sensorName + "):" << iioDevice.devicePath;
 
                 udev_list_entry_foreach(sysattr, udev_device_get_sysattr_list_entry(dev)) {
@@ -261,6 +262,15 @@ int IioAdaptor::findSensor(const QString &sensorName)
                         iioDevice.frequency = QString(value).toDouble(&ok);
                         if (ok) {
                             qDebug() << sensorName + ":" << "Frequency is" << iioDevice.frequency;
+                        }
+                    } else if (attributeName.endsWith("frequency_available")) {                        
+                        iioDevice.frequencyList = {};
+
+                        foreach(QString freq, QString(value).split(" ")){
+                            iioDevice.frequencyList << freq.toDouble(&ok);
+                        }
+                        if (ok) {
+                            qDebug() << sensorName + ":" << "Frequency list is" << iioDevice.frequencyList;
                         }
                     } else if (attributeName.contains(QRegularExpression(iioDevice.channelTypeName + ".*raw$"))) {
                         qDebug() << "adding to paths:" << iioDevice.devicePath
@@ -589,6 +599,22 @@ void IioAdaptor::processSample(int fileId, int fd)
 bool IioAdaptor::setInterval(const unsigned int value, const int sessionId)
 {
     if (mode() == SysfsAdaptor::IntervalMode)
+        if (value != 0) {
+            QString pathFreq = iioDevice.devicePath + "sampling_frequency";
+
+            float freq = 1000.0/value;
+            float out_freq = 1.0;
+
+            foreach(float valid_freq, iioDevice.frequencyList){
+                if (freq >= valid_freq){
+                    out_freq = valid_freq;
+                }                    
+            }
+
+            sysfsWriteInt(pathFreq, (int)out_freq);
+
+            qDebug() << iioDevice.name + ":" << "Frequency set to" << out_freq << "Hz";
+        }
         return SysfsAdaptor::setInterval(value, sessionId);
 
     sensordLogD() << "Ignoring setInterval for " << value;
