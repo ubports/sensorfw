@@ -104,10 +104,13 @@ void IioAdaptor::setup()
         devNodeNumber = findSensor(inputMatch);
         if (devNodeNumber!= -1) {
             const QString description = "Industrial I/O accelerometer (" + iioDevice.name +")";
+            setDescription(description);
+
+            const QString name = "accelerometeradaptor";
+            introduceAvailableIntervals(name);
 
             accelerometerBuffer_ = new DeviceAdaptorRingBuffer<TimedXyzData>(1);
             setAdaptedSensor(sensorTypeInConfig, iioDevice.name, accelerometerBuffer_);
-            setDescription(description);
 
             iioDevice.sensorType = IioAdaptor::IIO_ACCELEROMETER;
         }
@@ -183,7 +186,7 @@ void IioAdaptor::setup()
         scanElementsEnable(devNodeNumber,0);
     }
 
-    /* Temperary switch this of. scale_override is always set which can not be true???? Loading issue deviceinfo???
+    /* Temporarily disable 
     // Override the scaling factor if asked 
     bool ok;
     double scale_override = SensorFrameworkConfig::configuration()->value(iioDevice.name + "/scale").toDouble(&ok);
@@ -192,22 +195,20 @@ void IioAdaptor::setup()
         iioDevice.scale = scale_override;
     }
     */
-
-    introduceAvailableDataRange(DataRange(0, 65535, 1));
-    introduceAvailableInterval(DataRange(0, 586, 0));
-    setDefaultInterval(10);
 }
 
 int IioAdaptor::findSensor(const QString &sensorName)
 {
-    udev_list_entry *devices;
-    udev_list_entry *dev_list_entry;
-    udev_device *dev = 0;
+    // udev information https://www.freedesktop.org/software/systemd/man/udev_list_entry.html
+    struct udev_list_entry *devices;
+    struct udev_list_entry *dev_list_entry;
+    struct udev_device *dev = 0;
     struct udev *udevice = 0;
     struct udev_enumerate *enumerate = 0;
 
-    if (!udevice)
+    if (!udevice) {
         udevice = udev_new();
+    }
 
     enumerate = udev_enumerate_new(udevice);
     udev_enumerate_add_match_subsystem(enumerate, "iio");
@@ -217,85 +218,121 @@ int IioAdaptor::findSensor(const QString &sensorName)
 
     bool ok2;
 
+    // Iterate over the udev devices/sensors which are in the udev list
+    // https://github.com/systemd/systemd/blob/5efbd0bf897a990ebe43d7dc69141d87c404ac9a/src/libudev/libudev.h#L50
     udev_list_entry_foreach(dev_list_entry, devices) {
+        // Get the udev path from the udev list for the entry/device/sensor
         const char *path;
         path = udev_list_entry_get_name(dev_list_entry);
-
+        // Returns a pointer to the allocated udev device based on syspath. On failure, NULL is returned
         dev = udev_device_new_from_syspath(udevice, path);
+        // Check if strings are equal to each other to find the name of the device/sensor
         if (qstrcmp(udev_device_get_subsystem(dev), "iio") == 0) {
             iioDevice.name = QString::fromLatin1(udev_device_get_sysattr_value(dev,"name"));
+            // Check if the name of the sensor from this find sensor function is equal tot the name in the list from udev
             if (iioDevice.name == sensorName) {
                 struct udev_list_entry *sysattr;
                 int j = 0;
                 QString eventName = QString::fromLatin1(udev_device_get_sysname(dev));
                 iioDevice.devicePath = QString::fromLatin1(udev_device_get_syspath(dev)) +"/";
                 iioDevice.index = eventName.right(1).toInt(&ok2);
-                // Default values
+                // Set default values
                 iioDevice.offset = 0.0;
                 iioDevice.scale = 1.0;
-                iioDevice.frequency = 1.0;
-                iioDevice.frequencyList = {1.0};
+                iioDevice.frequency = 1;
                 qDebug() << Q_FUNC_INFO << "Syspath for sensor (" + sensorName + "):" << iioDevice.devicePath;
 
+                // Iterate over the udev devices/sensors which are in the udev list
                 udev_list_entry_foreach(sysattr, udev_device_get_sysattr_list_entry(dev)) {
+                    // Initialize values
                     const char *name;
                     const char *value;
                     bool ok;
+                    // Get the name of the sensor from the udev list
                     name = udev_list_entry_get_name(sysattr);
+                    // Get the value from the sysattr for the sensor with the name, name
                     value = udev_device_get_sysattr_value(dev, name);
-                    if (value == NULL)
+                    // Exit loop if there are no sysatrr otherwise write it out for debug.
+                    if (value == NULL) {
                         continue;
-                    qDebug() << "attr" << name << value;
+                    } else {
+                        qDebug() << "attr" << name << value;
+                    }
 
                     QString attributeName(name);
+                    // Search for the default applicable scale which scales the measured value to a value with a physical unit.
                     if (attributeName.contains(QRegularExpression(iioDevice.channelTypeName + ".*scale$"))) {
                         iioDevice.scale = QString(value).toDouble(&ok);
                         if (ok) {
                             qDebug() << sensorName + ":" << "Scale is" << iioDevice.scale;
                         }
-                    } else if (attributeName.contains(QRegularExpression(iioDevice.channelTypeName + ".*offset$"))) {
+                    }
+                    // Search for an offset. Take note that the offset can not be found in (1) and is probably not in use
+                    else if (attributeName.contains(QRegularExpression(iioDevice.channelTypeName + ".*offset$"))) {
                         iioDevice.offset = QString(value).toDouble(&ok);
                         if (ok) {
                             qDebug() << sensorName + ":" << "Offset is" << value;
                         }
-                    } else if (attributeName.endsWith("frequency")) {
+                    }
+                    // Search for the frequency where the sensor is running on.
+                    // Please note that sensorfw works with intervals in ms instead of frequencies
+                    else if (attributeName.endsWith("frequency")) {
                         iioDevice.frequency = QString(value).toDouble(&ok);
                         if (ok) {
                             qDebug() << sensorName + ":" << "Frequency is" << iioDevice.frequency;
                         }
-                    } else if (attributeName.endsWith("frequency_available")) {                        
-                        iioDevice.frequencyList = {};
+                    }
+                    // Search for the available frequencies where the sensor could run on.
+                    else if (attributeName.endsWith("frequency_available")) {
+                        QStringList frequencyStringList = QString(value).split(QRegExp("\\s+"), QString::SkipEmptyParts);
+                        unsigned int frequency;
+                        QList<unsigned int> frequencyList;
+                        //QList<double> intervalList;
+                        foreach(QString str, frequencyStringList) {
+                            frequency = QString(str).toInt(&ok);
+                            frequencyList.append(frequency);
+                            //intervalList.append(1000.0/frequency); //Interval are in ms
+                        }
+                        // In case of automatic configuration of the sensor (not in use now)
+                        // DataRange(double min, double max, double resolution)
+                        //double min = intervalList.at(intervalList.size()-1);
+                        //double max = intervalList.at(0);
+                        //interval = DataRange(min, max, 0.0);
+                        //introduceAvailableInterval(interval);
 
-                        foreach(QString freq, QString(value).split(" ")){
-                            iioDevice.frequencyList << freq.toDouble(&ok);
-                        }
+                        iioDevice.frequency_available = frequencyList;
                         if (ok) {
-                            qDebug() << sensorName + ":" << "Frequency list is" << iioDevice.frequencyList;
+                            qDebug() << sensorName + ":" << "Frequencies available are";
+                            for (int i = 0; i < iioDevice.frequency_available.size(); ++i) {
+                                qDebug() << iioDevice.frequency_available.at(i) << " ";
+                            }
                         }
-                    } else if (attributeName.contains(QRegularExpression(iioDevice.channelTypeName + ".*raw$"))) {
+                    }
+                    // Search for the paths to the values that have to be tracked.
+                    // 1 channel for a single parameter, 3 channels for a 3D measurement sensor
+                    else if (attributeName.contains(QRegularExpression(iioDevice.channelTypeName + ".*raw$"))) {
                         qDebug() << "adding to paths:" << iioDevice.devicePath
                                    << attributeName << iioDevice.index;
                         addPath(iioDevice.devicePath + attributeName, j);
                         j++;
                     }
                 }
+                // Store the number of channels in iioDevice.channels
                 iioDevice.channels = j;
-
-    // in_rot_from_north_magnetic_tilt_comp_raw ?
-
-                // type
                 break;
             }
         }
     }
-    if (dev)
+    if (dev) {
         udev_device_unref(dev);
+    }
     udev_enumerate_unref(enumerate);
 
-    if (ok2)
+    if (ok2) {
         return iioDevice.index;
-    else
+    } else {
         return -1;
+    }
 }
 /*
  * als
@@ -573,7 +610,7 @@ void IioAdaptor::processSample(int fileId, int fd)
                 magnetometerBuffer_->commit();
                 magnetometerBuffer_->wakeUpReaders();
                 // Uncomment line to test magnetometer sensor
-                sensordLogT() << "Magnetometer offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "x=" << calMagData->rx_ << "y=" << calMagData->ry_ << calMagData->rz_ << "timestamp=" << calMagData->timestamp_;
+                //sensordLogT() << "Magnetometer offset=" << iioDevice.offset << "scale=" << iioDevice.scale << "x=" << calMagData->rx_ << "y=" << calMagData->ry_ << calMagData->rz_ << "timestamp=" << calMagData->timestamp_;
                 break;
             case IioAdaptor::IIO_ALS:
                 uData->timestamp_ = Utils::getTimeStamp();
@@ -600,20 +637,23 @@ bool IioAdaptor::setInterval(const unsigned int value, const int sessionId)
 {
     if (mode() == SysfsAdaptor::IntervalMode)
         if (value != 0) {
-            QString pathFreq = iioDevice.devicePath + "sampling_frequency";
-
-            float freq = 1000.0/value;
-            float out_freq = 1.0;
-
-            foreach(float valid_freq, iioDevice.frequencyList){
-                if (freq >= valid_freq){
-                    out_freq = valid_freq;
-                }                    
+            // Path of the sampling_frequency
+            QString pathFrequency = iioDevice.devicePath + "sampling_frequency";
+            double requestedFrequency = 1000.0/(double)value;
+            sensordLogT() << iioDevice.name + ":" << "Requested interval is" << value << "ms, that translates to" << requestedFrequency << "Hz";
+            // Set default frequency to the first in the list (lowest frequency)
+            unsigned int setFrequency = iioDevice.frequency_available.at(0);
+            for(int i = 0; i < iioDevice.frequency_available.size(); i++){
+                double freqRatio = (double)iioDevice.frequency_available.at(i)/requestedFrequency;
+            	// Because of comparing integers with doubles, take the value within 15% of the requested value.
+                if(freqRatio > 0.85 && freqRatio < 1.15){
+                    setFrequency = iioDevice.frequency_available.at(i);
+                }
             }
+            // Write out the int frequency which is taken from the list from the sensor iio driver
+            sysfsWriteInt(pathFrequency, setFrequency);
 
-            sysfsWriteInt(pathFreq, (int)out_freq);
-
-            qDebug() << iioDevice.name + ":" << "Frequency set to" << out_freq << "Hz";
+            sensordLogT() << iioDevice.name + ":" << "Frequency is set to" << setFrequency << "Hz to" << pathFrequency;
         }
         return SysfsAdaptor::setInterval(value, sessionId);
 

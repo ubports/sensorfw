@@ -66,7 +66,7 @@ class IioAdaptor : public SysfsAdaptor
       qreal scale;
       qreal offset;
       int frequency;
-      QList<float> frequencyList;
+      QList<unsigned int> frequency_available;
       QString devicePath;
       int index;
       IioSensorType sensorType;
