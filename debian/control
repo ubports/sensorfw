@@ -16,7 +16,9 @@ Build-Depends: debhelper (>=5),
                libdeviceinfo-dev,
                libglib2.0-dev,
                libglibutil-dev,
-               libgbinder-dev
+               libgbinder-dev,
+               linux-hidl-dev,
+               linux-hidl-hardware-dev
 Standards-Version: 3.7.3
 
 Package: sensorfw-qt5
@@ -68,7 +70,7 @@ Package: libsensorfw-qt5-hybris
 Section: misc
 Priority: extra
 Architecture: any
-Depends: sensorfw-qt5 (= ${binary:Version}), libqt5core5a, libhardware2
+Depends: sensorfw-qt5 (= ${binary:Version}), libqt5core5a, libhardware2, linux-hidl-hardware-sensors
 Description: Sensor framework hybris support
  Provides support for hybris Sensor framework backend.
 

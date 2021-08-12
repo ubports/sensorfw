@@ -31,6 +31,18 @@
 #ifdef USE_BINDER
 #include <gbinder.h>
 #include "hybrisbindertypes.h"
+
+#include <sys/user.h>
+#ifndef PAGE_SIZE
+#define PAGE_SHIFT		12
+#define PAGE_SIZE		(1UL << PAGE_SHIFT)
+#endif
+#include <memory>
+#include <fmq/MessageQueue.h>
+#include <fmq/EventFlag.h>
+
+#include "android/hardware/sensors/1.0/ISensors.h"
+#include "android/hardware/sensors/2.0/ISensors.h"
 #else
 #include <hardware/sensors.h>
 #include <pthread.h>
@@ -102,6 +114,15 @@ private:
     GBinderRemoteObject          *m_remote;
     GBinderServiceManager        *m_serviceManager;
     struct sensor_t              *m_sensorArray;   // [m_sensorCount]
+
+    typedef android::hardware::MessageQueue<android::hardware::sensors::V1_0::Event, android::hardware::kSynchronizedReadWrite> EventMessageQueue;
+    typedef android::hardware::MessageQueue<uint32_t, android::hardware::kSynchronizedReadWrite> WakeLockQueue;
+    std::unique_ptr<EventMessageQueue> m_eventQueue;
+    std::unique_ptr<WakeLockQueue> m_wakeLockQueue;
+    android::hardware::EventFlag* m_eventQueueFlag;
+    android::hardware::EventFlag* m_wakeLockQueueFlag;
+    android::sp<android::hardware::sensors::V2_0::ISensors> m_sensors;
+    pthread_t                     m_fmqEventReaderTid;
 #else
     // HAL backend
     struct sensors_module_t      *m_halModule;
@@ -116,8 +137,10 @@ private:
 
 #ifdef USE_BINDER
     void getSensorList();
+    void getSensorList_2_0();
     void startConnect();
     void finishConnect();
+    void finishConnect_2_0();
     static void binderDied(GBinderRemoteObject *, void *user_data);
     void pollEvents();
     static void pollEventsCallback(
@@ -127,7 +150,9 @@ private:
 
     friend class HybrisAdaptorReader;
 
-#ifndef USE_BINDER
+#ifdef USE_BINDER
+    static void *fmqEventReaderThread(void *aptr);
+#else
 private:
     static void *halEventReaderThread(void *aptr);
 #endif
