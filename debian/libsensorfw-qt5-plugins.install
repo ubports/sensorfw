@@ -39,3 +39,4 @@
 /usr/lib/sensord-qt5/libpegatronaccelerometeradaptor-qt5.so   
 /usr/lib/sensord-qt5/librotationsensor-qt5.so
 /usr/lib/sensord-qt5/libiiosensorsadaptor-qt5.so
+/usr/lib/sensord-qt5/libmagcoordinatealignfilter-qt5.so
